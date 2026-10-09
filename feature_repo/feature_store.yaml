@@ -1,0 +1,14 @@
+# Feast 仓库配置（参考实现，本项目不依赖 feast）。
+# 全部用本地文件 / sqlite，无需任何云资源即可 `feast apply`。
+project: intent_mlops
+provider: local
+registry: data/registry.db
+
+offline_store:
+  type: file          # 离线存储：本地 parquet，扫描 + as-of join
+
+online_store:
+  type: sqlite        # 在线存储：本地 sqlite，主键点查
+  path: data/online_store.db
+
+entity_key_serialization_version: 3

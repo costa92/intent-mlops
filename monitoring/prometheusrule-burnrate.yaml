@@ -1,0 +1,51 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: intent-api-burnrate
+  labels: {app: intent-api, role: alert-rule}
+spec:
+  groups:
+    # 依赖 recordingrule.yaml 产出的 intent_api:request_error_ratio:rateXX 序列，
+    # 必须先 apply recordingrule.yaml，否则以下表达式全部为空。
+    # SLO = 99.9% 可用性，允许错误率 0.001，燃烧率 = 实际错误率 / 0.001。
+    - name: intent-api-burnrate
+      interval: 30s
+      rules:
+        # 快窗：2 天烧光 28 天预算，正在发生的事故，立即 page
+        - alert: IntentApiErrorBudgetBurnFast
+          expr: |
+            intent_api:request_error_ratio:rate1h / 0.001 > 14.4
+            and
+            intent_api:request_error_ratio:rate5m / 0.001 > 14.4
+            and
+            intent_api:request:rate5m > 0.1
+          for: 2m
+          labels: {severity: critical}
+          annotations:
+            summary: Intent API burning error budget 14.4x (1h and 5m windows)
+            description: >-
+              1h 与 5m 燃烧率同时超过 14.4，按此速度约 2 天烧光 28 天错误预算。
+              先看 sum by (model_version, status) (rate(intent_api_requests_total[5m])) 定位版本与错误类型。
+
+        # 慢窗：约 5 天烧光预算，慢性退化，开工单不叫醒人
+        - alert: IntentApiErrorBudgetBurnSlow
+          expr: |
+            intent_api:request_error_ratio:rate6h / 0.001 > 6
+            and
+            intent_api:request_error_ratio:rate30m / 0.001 > 6
+            and
+            intent_api:request:rate5m > 0.1
+          for: 15m
+          labels: {severity: warning}
+          annotations:
+            summary: Intent API burning error budget 6x (6h and 30m windows)
+            description: >-
+              6h 与 30m 燃烧率同时超过 6，属于慢性退化，工作时间处理即可。
+
+        # 延迟 SLO 守卫，基于 recording rule 而非原始直方图
+        - alert: IntentApiP95LatencyDegraded
+          expr: intent_api:prediction_seconds:p95_5m > 0.15
+          for: 10m
+          labels: {severity: warning}
+          annotations:
+            summary: Intent API p95 prediction latency exceeds 150 ms

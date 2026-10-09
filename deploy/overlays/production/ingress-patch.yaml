@@ -1,0 +1,21 @@
+# 把 Middleware 挂到 router 上并启用 TLS。
+# 引用格式是 <middleware 命名空间>-<middleware 名>@kubernetescrd，逗号分隔、
+# 从左到右依次执行；漏掉 @kubernetescrd 后缀 Traefik 会静默找不到它，
+# router 照常工作而策略一条没生效。
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: intent-api
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.middlewares: >-
+      intent-mlops-intent-api-ipallowlist@kubernetescrd,
+      intent-mlops-intent-api-ratelimit@kubernetescrd,
+      intent-mlops-intent-api-buffering@kubernetescrd,
+      intent-mlops-intent-api-inflight@kubernetescrd,
+      intent-mlops-intent-api-secheaders@kubernetescrd
+spec:
+  tls:
+    - hosts: [intent-api.example.com]
+      secretName: intent-api-tls

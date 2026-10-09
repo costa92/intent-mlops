@@ -1,0 +1,13 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: intent-mlops
+# 生产收敛面：base 只有工作负载，网关策略和监控规则必须一起纳管，
+# 否则 Middleware/ServiceMonitor 躺在仓库里却从未生效——清单存在
+# 不等于策略生效，这是本系列第 12 篇点名的那类问题。
+resources:
+  - ../../base
+  - ../../gateway
+  - ../../../monitoring
+patches:
+  - path: ingress-patch.yaml
+    target: {kind: Ingress, name: intent-api}

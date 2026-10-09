@@ -1,0 +1,67 @@
+# Default deny for intent-api, then an explicit allowlist of callers.
+# Requires PeerAuthentication STRICT: without mTLS there is no verified
+# principal and every rule below would fail open on identity.
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: intent-api-deny-all
+  namespace: intent-mlops
+spec:
+  selector:
+    matchLabels: {app: intent-api}
+  # An ALLOW policy with empty rules matches nothing, i.e. denies everything.
+  # Strictly it is redundant -- as soon as ANY ALLOW policy selects this
+  # workload, anything not matched is already denied -- but keeping it makes
+  # the default explicit and survives someone deleting the allowlist below.
+  action: ALLOW
+  rules: []
+---
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: intent-api-allow-callers
+  namespace: intent-mlops
+spec:
+  selector:
+    matchLabels: {app: intent-api}
+  action: ALLOW
+  rules:
+    # 1. The ingress gateway, for external user traffic.
+    #
+    # WARNING - pick ONE ingress and make this principal match it.
+    # The base manifests route external traffic through Traefik (see
+    # deploy/base/ingress.yaml, ingressClassName: traefik), NOT through the
+    # Istio ingress gateway. Applying this file as-is on a mesh-enabled
+    # namespace rejects every Traefik request with 403 - the manifest is
+    # valid, the pods are healthy, and the service is down.
+    #
+    # Two coherent options:
+    #   a) Move ingress to the Istio gateway and keep the principal below.
+    #   b) Keep Traefik: put its pods in the mesh and change the principal to
+    #      cluster.local/ns/traefik/sa/traefik  (verify the real SA name with
+    #      `kubectl get sa -n traefik`), or exempt port 8080 with a PERMISSIVE
+    #      PeerAuthentication plus a NetworkPolicy that only admits Traefik.
+    #
+    # Also note: without sidecar injection on this namespace there is no data
+    # plane to enforce any of this. Injection state must be part of GitOps
+    # (`kubectl label ns intent-mlops istio-injection=enabled`), otherwise the
+    # policy silently does nothing and east-west calls bypass it entirely.
+    - from:
+        - source:
+            principals:
+              - cluster.local/ns/istio-system/sa/istio-ingressgateway-service-account
+      to:
+        - operation:
+            methods: ["POST"]
+            paths: ["/predict"]
+    # 2. Prometheus scraping /metrics. kubelet probes on /healthz and /readyz
+    #    are not covered here: Istio rewrites them to bypass the sidecar's
+    #    authz filter, so they need no principal.
+    - from:
+        - source:
+            principals:
+              - cluster.local/ns/monitoring/sa/prometheus
+      to:
+        - operation:
+            methods: ["GET"]
+            paths: ["/metrics"]

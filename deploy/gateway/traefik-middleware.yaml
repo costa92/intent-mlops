@@ -1,0 +1,88 @@
+# Traefik v3 Middleware CRDs for the intent-api ingress.
+# Attach them to the native Ingress with:
+#   traefik.ingress.kubernetes.io/router.middlewares: >-
+#     intent-mlops-intent-api-ipallowlist@kubernetescrd,
+#     intent-mlops-intent-api-ratelimit@kubernetescrd,
+#     intent-mlops-intent-api-buffering@kubernetescrd,
+#     intent-mlops-intent-api-inflight@kubernetescrd,
+#     intent-mlops-intent-api-secheaders@kubernetescrd
+# Reference format is <middleware-namespace>-<middleware-name>@kubernetescrd,
+# and middlewares are applied left to right.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: intent-api-ipallowlist
+  namespace: intent-mlops
+spec:
+  ipAllowList:
+    # v3 renamed ipWhiteList -> ipAllowList. Replace with your real CIDRs.
+    sourceRange:
+      - 10.0.0.0/8
+      - 203.0.113.0/24
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: intent-api-ratelimit
+  namespace: intent-mlops
+spec:
+  rateLimit:
+    # Average requests/second per source, with a short burst allowance.
+    average: 20
+    burst: 40
+    period: 1s
+    sourceCriterion:
+      ipStrategy:
+        # Number of trusted proxies in front of Traefik (e.g. one AWS NLB/ALB).
+        depth: 1
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: intent-api-buffering
+  namespace: intent-mlops
+spec:
+  buffering:
+    # app.py rejects text longer than 2000 chars with 413; this rejects the
+    # oversized body before it ever reaches a gunicorn worker.
+    maxRequestBodyBytes: 65536
+    memRequestBodyBytes: 65536
+    maxResponseBodyBytes: 1048576
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: intent-api-inflight
+  namespace: intent-mlops
+spec:
+  inFlightReq:
+    # Bounds concurrent in-flight requests per source; protects the small
+    # gunicorn thread pool from a single noisy client.
+    amount: 25
+    sourceCriterion:
+      ipStrategy:
+        depth: 1
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: intent-api-secheaders
+  namespace: intent-mlops
+spec:
+  headers:
+    stsSeconds: 31536000
+    stsIncludeSubdomains: true
+    contentTypeNosniff: true
+    frameDeny: true
+    referrerPolicy: no-referrer
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: intent-api-retry
+  namespace: intent-mlops
+spec:
+  retry:
+    # Only safe because /predict is idempotent and has no side effects.
+    attempts: 2
+    initialInterval: 100ms

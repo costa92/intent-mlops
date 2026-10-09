@@ -1,0 +1,19 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: intent-api
+  namespace: intent-mlops
+  # Prometheus 实例的 serviceMonitorSelector 要能选中这些标签。
+  # kube-prometheus-stack 通常还要求 release 标签与 Helm release 名一致，
+  # 装的时候用 `kubectl get prometheus -A -o yaml | grep -A5 serviceMonitorSelector`
+  # 查一下自己的实例要什么，不要照抄。
+  labels: {app: intent-api, role: service-monitor}
+spec:
+  namespaceSelector:
+    matchNames: [intent-mlops]
+  selector:
+    matchLabels: {app: intent-api}
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s

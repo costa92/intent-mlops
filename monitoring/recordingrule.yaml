@@ -1,0 +1,41 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: intent-api-recording
+  labels: {app: intent-api, role: recording-rule}
+spec:
+  groups:
+    - name: intent-api-sli
+      interval: 30s
+      rules:
+        # 错误率 SLI，多个时间窗共用同一口径（分母 clamp_min 防零流量 NaN）
+        - record: intent_api:request_error_ratio:rate5m
+          expr: |
+            sum(rate(intent_api_requests_total{status!="success"}[5m]))
+            /
+            clamp_min(sum(rate(intent_api_requests_total[5m])), 0.001)
+        - record: intent_api:request_error_ratio:rate30m
+          expr: |
+            sum(rate(intent_api_requests_total{status!="success"}[30m]))
+            /
+            clamp_min(sum(rate(intent_api_requests_total[30m])), 0.001)
+        - record: intent_api:request_error_ratio:rate1h
+          expr: |
+            sum(rate(intent_api_requests_total{status!="success"}[1h]))
+            /
+            clamp_min(sum(rate(intent_api_requests_total[1h])), 0.001)
+        - record: intent_api:request_error_ratio:rate6h
+          expr: |
+            sum(rate(intent_api_requests_total{status!="success"}[6h]))
+            /
+            clamp_min(sum(rate(intent_api_requests_total[6h])), 0.001)
+
+        # 延迟 SLI：成功请求的模型推理 p95（口径见第 19 篇第 2 节）
+        - record: intent_api:prediction_seconds:p95_5m
+          expr: |
+            histogram_quantile(0.95,
+              sum by (le) (rate(intent_api_prediction_seconds_bucket[5m])))
+
+        # 总请求率，仪表盘与"绝对量守卫"共用
+        - record: intent_api:request:rate5m
+          expr: sum(rate(intent_api_requests_total[5m]))

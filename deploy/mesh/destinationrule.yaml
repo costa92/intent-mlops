@@ -1,0 +1,32 @@
+# Subsets are label selectors, not deployments. They only resolve if the
+# pods actually carry `version: stable` / `version: canary`, which means the
+# base Deployment's pod template needs that extra label and a second
+# Deployment (same Service, same `app: intent-api` label) must exist.
+apiVersion: networking.istio.io/v1
+kind: DestinationRule
+metadata:
+  name: intent-api
+  namespace: intent-mlops
+spec:
+  host: intent-api.intent-mlops.svc.cluster.local
+  trafficPolicy:
+    tls:
+      # ISTIO_MUTUAL pairs with PeerAuthentication STRICT on the server side.
+      mode: ISTIO_MUTUAL
+    connectionPool:
+      tcp:
+        maxConnections: 100
+      http:
+        http2MaxRequests: 200
+        maxRequestsPerConnection: 0
+    outlierDetection:
+      # Eject a replica from the pool after 5 consecutive 5xx.
+      consecutive5xxErrors: 5
+      interval: 10s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+  subsets:
+    - name: stable
+      labels: {version: stable}
+    - name: canary
+      labels: {version: canary}

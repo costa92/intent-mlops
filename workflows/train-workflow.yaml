@@ -1,0 +1,38 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: intent-training-
+  annotations:
+    intent-mlops.example.com/tested-with: argo-workflows-v4.0.5_kubernetes-v1.34
+spec:
+  entrypoint: pipeline
+  # Created by serviceaccount.yaml in this directory; apply that first.
+  serviceAccountName: intent-training
+  arguments:
+    parameters:
+      - {name: image, value: "REGISTRY/intent-trainer@sha256:REPLACE_WITH_DIGEST"}
+      # The teaching image contains this file. Replace with an Argo artifact
+      # input or DVC pull for immutable S3 datasets in a real environment.
+      - {name: data-path, value: data/intents.csv}
+  templates:
+    - name: pipeline
+      dag:
+        tasks:
+          - {name: validate, template: validate}
+          - name: train
+            dependencies: [validate]
+            template: train
+    - name: validate
+      container:
+        image: "{{workflow.parameters.image}}"
+        command: [python, -m, intent_mlops.validate]
+        env:
+          - {name: DATA_PATH, value: "{{workflow.parameters.data-path}}"}
+    - name: train
+      container:
+        image: "{{workflow.parameters.image}}"
+        command: [python, -m, intent_mlops.train_mlflow]
+        env:
+          - {name: DATA_PATH, value: "{{workflow.parameters.data-path}}"}
+          # Matches the chart install in chapter 06: namespace mlflow, Service port 80.
+          - {name: MLFLOW_TRACKING_URI, value: "http://mlflow.mlflow.svc.cluster.local:80"}

@@ -1,0 +1,30 @@
+stages:
+  validate:
+    cmd: python -m intent_mlops.validate > artifacts/validation.json.tmp &&
+      mv artifacts/validation.json.tmp artifacts/validation.json
+    deps:
+      - data/intents.csv
+      - src/intent_mlops/validate.py
+      - thresholds.yaml
+    outs:
+      - artifacts/validation.json
+  train:
+    cmd: python -m intent_mlops.train
+    deps:
+      # artifacts/validation.json 是 validate 阶段的产物 —— 列它才让 train
+      # 成为 DAG 上的下游节点。只共享 data/ 和 validate.py 不构成依赖：
+      # `dvc repro train` 会直接跳过校验。
+      - artifacts/validation.json
+      - data/intents.csv
+      - params.yaml
+      - thresholds.yaml
+      - src/intent_mlops/train.py
+      - src/intent_mlops/validate.py
+    params:
+      - train
+    outs:
+      - artifacts/intent-model.joblib
+      - artifacts/metadata.json
+    metrics:
+      - artifacts/metrics.json
+

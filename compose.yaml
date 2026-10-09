@@ -1,0 +1,16 @@
+services:
+  intent-api:
+    build: .
+    ports:
+      - "8080:8080"
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/readyz')"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+

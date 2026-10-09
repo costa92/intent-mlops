@@ -1,0 +1,12 @@
+# CODEOWNERS —— 阈值改动必须由数据负责人 review。
+# 下面的 @data-team / @platform-ml 是占位团队名，落地时替换成你们组织里真实存在的
+# GitHub team（形如 @your-org/your-team），并在仓库设置里开启
+# Settings → Branches → Require review from Code Owners，否则本文件只是注释。
+
+# 数据质量门禁阈值：降低标准是数据门禁最常见的死法，强制评审。
+/thresholds.yaml            @data-team
+
+# 门禁实现本身与训练数据
+/src/intent_mlops/validate.py   @data-team @platform-ml
+/src/intent_mlops/baseline.py   @data-team @platform-ml
+/data/                          @data-team

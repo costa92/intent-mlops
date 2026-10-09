@@ -1,0 +1,60 @@
+# subset 是标签选择器，不是 Deployment。destinationrule.yaml 里的 stable/canary
+# 两个 subset 依赖 pod 标签 version=stable|canary，而 base/deployment.yaml 的
+# Pod 只有 app=intent-api —— 不打这个标签，两个 subset 都解析到零端点，
+# 服务 100% 不可用而清单完全合法。
+#
+# 用法：
+#   1) 给现有 Deployment 的 pod 模板补 version: stable
+#      kubectl patch deployment intent-api -n intent-mlops --type strategic-merge \
+#        -p '{"spec":{"template":{"metadata":{"labels":{"version":"stable"}}}}}'
+#   2) apply 本文件，起一份 canary
+#   3) 用 VirtualService 的 weight 按 5→25→50→100 放量（第 15 篇第 7 节给判据）
+#
+# 两个 Deployment 共用同一个 intent-api Service（selector 只认 app 标签）。
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: intent-api-canary
+  namespace: intent-mlops
+  labels: {app: intent-api, version: canary}
+spec:
+  # canary 副本数与权重无关：权重由 VirtualService 决定，这里只要够扛住
+  # 被分到的那部分流量即可。1 个副本没有冗余，放量到 25% 以上应加到 2。
+  replicas: 1
+  selector:
+    matchLabels: {app: intent-api, version: canary}
+  template:
+    metadata:
+      labels: {app: intent-api, version: canary}
+    spec:
+      serviceAccountName: intent-api
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        seccompProfile: {type: RuntimeDefault}
+      volumes:
+        - name: tmp
+          emptyDir: {medium: Memory, sizeLimit: 64Mi}
+      containers:
+        - name: api
+          # 换成待验证的新版本 digest，其余字段与 base/deployment.yaml 保持一致
+          image: REGISTRY/intent-api@sha256:REPLACE_WITH_CANARY_DIGEST
+          ports:
+            - {name: http, containerPort: 8080}
+          readinessProbe:
+            httpGet: {path: /readyz, port: http}
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: {path: /healthz, port: http}
+            periodSeconds: 10
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+          resources:
+            requests: {cpu: 250m, memory: 256Mi}
+            limits: {cpu: "1", memory: 512Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            capabilities: {drop: ["ALL"]}

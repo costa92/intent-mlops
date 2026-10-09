@@ -1,0 +1,43 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: intent-api
+  # kube-prometheus-stack 的 ruleSelector 默认按标签选取 PrometheusRule；
+  # 少了这行，规则 apply 成功却被 Prometheus 静默忽略。
+  labels: {app: intent-api, role: alert-rule}
+spec:
+  groups:
+    - name: intent-api-slo
+      rules:
+        - alert: IntentApiHighErrorRatio
+          expr: |
+            sum(rate(intent_api_requests_total{status!="success"}[5m]))
+            /
+            clamp_min(sum(rate(intent_api_requests_total[5m])), 0.001)
+            > 0.02
+          for: 10m
+          labels: {severity: warning}
+          annotations:
+            summary: Intent API non-success ratio exceeds 2%
+        - alert: IntentApiHighP95Latency
+          expr: |
+            histogram_quantile(0.95,
+              sum by (le) (rate(intent_api_prediction_seconds_bucket[5m])))
+            > 0.15
+          for: 10m
+          labels: {severity: warning}
+          annotations:
+            summary: Intent API p95 prediction latency exceeds 150 ms
+        - alert: IntentApiPredictionSkew
+          expr: |
+            max(
+              sum by (label) (rate(intent_api_predictions_total[30m]))
+              / on() group_left()
+              clamp_min(sum(rate(intent_api_predictions_total[30m])), 0.001)
+            )
+            > 0.6
+          for: 30m
+          labels: {severity: info}
+          annotations:
+            summary: One intent label exceeds 60% of predictions over 30m
+

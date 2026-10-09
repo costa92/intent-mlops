@@ -1,0 +1,49 @@
+# 可用性告警：补上业务指标看不见的那半个世界。
+#
+# 为什么单独一份：intent_api_* 全部由应用自己产生，应用起不来、抓取断了、
+# 或者所有副本未就绪时，这些序列直接消失。而"序列不存在"在 PromQL 里
+# 不会触发任何基于比率的告警——错误率、燃烧率表达式都会得到空向量，
+# 于是 100% 故障反而一片安静。下面这几条专门盯"没有数据"这件事。
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: intent-api-availability
+  namespace: intent-mlops
+  labels: {app: intent-api, role: alert-rule}
+spec:
+  groups:
+    - name: intent-api-availability
+      rules:
+        - alert: IntentApiTargetDown
+          # up 由 Prometheus 自己产生，与应用是否健康无关，所以应用挂了它仍在。
+          expr: up{job="intent-api"} == 0
+          for: 2m
+          labels: {severity: critical}
+          annotations:
+            summary: Prometheus cannot scrape intent-api target
+
+        - alert: IntentApiNoMetrics
+          # 连 up 都没有 —— ServiceMonitor 没被选中、namespace 写错、
+          # 或整个 Service 消失。这条是监控自身的健康检查。
+          expr: absent(up{job="intent-api"})
+          for: 10m
+          labels: {severity: critical}
+          annotations:
+            summary: intent-api target has disappeared from Prometheus
+
+        - alert: IntentApiNoReadyReplicas
+          # 所有副本未就绪时流量到不了应用，503 由代理产生，
+          # 应用侧的 not_ready 计数器可能一直是零。
+          expr: kube_deployment_status_replicas_available{deployment="intent-api"} == 0
+          for: 2m
+          labels: {severity: critical}
+          annotations:
+            summary: intent-api has zero available replicas
+
+        - alert: IntentApiReplicasBelowPDB
+          expr: |
+            kube_deployment_status_replicas_available{deployment="intent-api"} < 2
+          for: 10m
+          labels: {severity: warning}
+          annotations:
+            summary: intent-api available replicas below PDB minAvailable

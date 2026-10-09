@@ -1,0 +1,12 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: intent-mlops
+# ServiceMonitor / PrometheusRule 必须和被监控的 Service 在同一 namespace，
+# 且带上 Prometheus 实例 ruleSelector / serviceMonitorSelector 认得的标签。
+# 只 apply 不给 namespace，对象会落到 default，抓取目标数恒为 0。
+resources:
+  - servicemonitor.yaml
+  - recordingrule.yaml
+  - prometheusrule.yaml
+  - prometheusrule-burnrate.yaml
+  - availability-rules.yaml

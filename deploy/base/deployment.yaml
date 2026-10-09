@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: intent-api
+  labels: {app: intent-api}
+spec:
+  replicas: 3
+  strategy:
+    rollingUpdate: {maxSurge: 1, maxUnavailable: 0}
+  selector:
+    matchLabels: {app: intent-api}
+  template:
+    metadata:
+      labels: {app: intent-api}
+    spec:
+      serviceAccountName: intent-api
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        seccompProfile: {type: RuntimeDefault}
+      volumes:
+        # gunicorn worker heartbeat writes to /tmp; readOnlyRootFilesystem needs this.
+        - name: tmp
+          emptyDir: {medium: Memory, sizeLimit: 64Mi}
+      containers:
+        - name: api
+          image: REGISTRY/intent-api@sha256:REPLACE_WITH_DIGEST
+          ports:
+            - {name: http, containerPort: 8080}
+          readinessProbe:
+            httpGet: {path: /readyz, port: http}
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: {path: /healthz, port: http}
+            periodSeconds: 10
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+          resources:
+            requests: {cpu: 250m, memory: 256Mi}
+            limits: {cpu: "1", memory: 512Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            capabilities: {drop: ["ALL"]}
+

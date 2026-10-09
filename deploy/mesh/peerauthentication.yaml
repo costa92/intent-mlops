@@ -1,0 +1,10 @@
+# Force mTLS for every workload in intent-mlops. Plaintext calls to the
+# inference endpoint are rejected at the sidecar, before the app sees them.
+apiVersion: security.istio.io/v1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: intent-mlops
+spec:
+  mtls:
+    mode: STRICT

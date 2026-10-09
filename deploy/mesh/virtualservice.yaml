@@ -1,0 +1,30 @@
+# Weighted split between the stable and canary subsets. The weights are the
+# execution side of the canary gate in deploy/canary/gate.py: `promote`
+# bumps canary 5 -> 25 -> 50 -> 100, `rollback` sets it back to 0.
+# Weights must sum to 100.
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: intent-api
+  namespace: intent-mlops
+spec:
+  hosts:
+    - intent-api.intent-mlops.svc.cluster.local
+  http:
+    - name: weighted-canary
+      timeout: 2s
+      retries:
+        attempts: 2
+        perTryTimeout: 800ms
+        retryOn: gateway-error,connect-failure,refused-stream
+      route:
+        - destination:
+            host: intent-api.intent-mlops.svc.cluster.local
+            subset: stable
+            port: {number: 80}
+          weight: 95
+        - destination:
+            host: intent-api.intent-mlops.svc.cluster.local
+            subset: canary
+            port: {number: 80}
+          weight: 5

@@ -1,0 +1,28 @@
+# thresholds.yaml —— 数据质量门禁阈值
+# 修改这里的任何数值都必须走 PR 评审（见 .github/CODEOWNERS），理由写进 PR 描述。
+schema:
+  required_columns: [text, label]
+  expected_labels: [account, billing, technical_support]
+  min_text_length: 2
+  allow_duplicates: false
+
+volume:
+  min_samples_per_label: 5
+  # 不对称阈值：缩减比增长危险
+  total_rows_shrink_fail_pct: 10
+  total_rows_growth_warn_pct: 50
+
+drift:
+  # 与已批准基线（artifacts/validation.baseline.json）比较
+  class_ratio_warn: 0.05
+  class_ratio_fail: 0.15
+  p95_text_length_warn_pct: 30
+  # 下面这条尚未被 validate.py / baseline.py 读取，是为 OOV 检查预留的位置
+  oov_rate_warn: 0.20
+
+# governance 段同样是占位：当前没有代码读它，作用是让"这份数据归谁、
+# 留多久"和阈值一起进版本控制、一起走 CODEOWNERS 评审。
+governance:
+  owner: platform-ml
+  purpose: intent-classification
+  retention_days: 365

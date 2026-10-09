@@ -1,0 +1,9 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: intent-mlops
+# 这份 SA 与 base/serviceaccount.yaml 内容相同但各自独立：kustomize 默认禁止
+# 引用 root 之外的裸文件，而 base/ 与 kserve/ 是互斥的两条服务路径，
+# 不共享 overlay，复制一份比放开 loadRestrictor 更安全。
+resources:
+  - serviceaccount.yaml
+  - inferenceservice.yaml

@@ -1,0 +1,37 @@
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: intent-api
+  namespace: argocd
+  finalizers:
+    # 删除 Application 时级联清理它创建的资源，避免留下孤儿
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: intent-mlops
+  source:
+    # 替换为你自己的 GitOps 仓库地址（本文示例为占位符）
+    repoURL: https://github.com/costa92/intent-mlops.git
+    # 指向 overlay 而不是 base：base 只有工作负载，网关 Middleware 与监控规则
+    # 不在里面。只同步 base 的后果是清单躺在 Git 里却从未生效。
+    # 只跟受保护分支；不要写 HEAD 或可移动 tag
+    targetRevision: main
+    path: example/deploy/overlays/production
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: intent-mlops
+  syncPolicy:
+    automated:
+      # 集群里被手工改动的字段会被拉回 Git 声明的值
+      selfHeal: true
+      # Git 里删掉的资源，集群里也删掉
+      prune: true
+    syncOptions:
+      - CreateNamespace=false
+      - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 3m

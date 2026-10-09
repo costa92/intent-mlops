@@ -1,0 +1,15 @@
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  name: intent-classifier
+  namespace: intent-mlops
+spec:
+  predictor:
+    serviceAccountName: intent-api
+    model:
+      modelFormat: {name: sklearn}
+      # This immutable prefix must contain the runtime-compatible model.joblib.
+      storageUri: s3://REPLACE_BUCKET/intent-classifier/REPLACE_VERSION/
+      resources:
+        requests: {cpu: 250m, memory: 512Mi}
+        limits: {cpu: "1", memory: 1Gi}

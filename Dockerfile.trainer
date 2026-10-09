@@ -1,0 +1,26 @@
+# Training image for the Argo Workflow in workflows/train-workflow.yaml.
+# Different from the service Dockerfile: no Flask/gunicorn runtime, no model
+# baked in at build time. Training happens at run time, inside the cluster.
+FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    DATA_PATH=data/intents.csv
+
+WORKDIR /app
+COPY pyproject.toml README.md ./
+COPY src/ ./src/
+COPY data/ ./data/
+COPY params.yaml thresholds.yaml ./
+# `.[mlops]` pulls in mlflow and dvc[s3]; a plain `pip install .` would leave
+# `python -m intent_mlops.train_mlflow` failing with ModuleNotFoundError: mlflow.
+RUN pip install --no-cache-dir '.[mlops]' && \
+    mkdir -p /app/artifacts && \
+    chown -R 10001:10001 /app/artifacts && \
+    # COPY 会原样保留宿主机的文件权限。仓库里的 data/ 与 *.yaml 可能是 0600，
+    # 那样非 root 的 10001 在运行期读不到自己的数据集，报 PermissionError 而不是
+    # 任何 Argo 层面的错。显式放开只读位，让镜像不受构建机 umask 影响。
+    chmod -R a+rX /app/data /app/src /app/params.yaml /app/thresholds.yaml
+
+USER 10001:10001
+CMD ["python", "-m", "intent_mlops.train_mlflow"]

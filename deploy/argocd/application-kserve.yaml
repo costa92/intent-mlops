@@ -1,0 +1,40 @@
+# KServe 路径的 Application。与 application.yaml 的 base 路径**互斥**：
+# base/ 是原生 Deployment+Service+Ingress+HPA+PDB，kserve/ 是同一个模型的
+# InferenceService 声明。同时启用会在一个命名空间里跑两套服务栈。
+# 发布新模型版本 = 改 kserve/inferenceservice.yaml 的 storageUri 并合入 main，
+# 由这个 Application 收敛。
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: intent-classifier-kserve
+  namespace: argocd
+  finalizers:
+    # 删除 Application 时级联清理它创建的资源，避免留下孤儿
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: intent-mlops
+  source:
+    # 替换为你自己的 GitOps 仓库地址（本文示例为占位符）
+    repoURL: https://github.com/costa92/intent-mlops.git
+    # 只跟受保护分支；不要写 HEAD 或可移动 tag
+    targetRevision: main
+    path: example/deploy/kserve
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: intent-mlops
+  syncPolicy:
+    automated:
+      # 集群里被手工改动的字段会被拉回 Git 声明的值
+      selfHeal: true
+      # Git 里删掉的资源，集群里也删掉
+      prune: true
+    syncOptions:
+      - CreateNamespace=false
+      - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 3m

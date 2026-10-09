@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "intent-mlops-example"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+  "Flask>=3.1,<4",
+  "gunicorn>=23,<24",
+  "joblib>=1.4,<2",
+  "pandas>=2.2,<4",
+  "prometheus-client>=0.21,<1",
+  "PyYAML>=6,<7",
+  # NOTE: KServe 0.18 的内置 sklearnserver 固定 scikit-learn ~=1.5.1。
+  # 本工程停在 1.6 是有意选择：joblib 制品不保证跨 sklearn 大版本兼容，
+  # 所以走 KServe 那条路径时必须自建同一依赖锁的 ServingRuntime，
+  # 不能用内置 runtime（见第 11 篇第 1 节与附录 D 版本表）。
+  "scikit-learn>=1.6,<2",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<10"]
+mlops = ["dvc[s3]>=3.60,<4", "mlflow>=3,<4"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
